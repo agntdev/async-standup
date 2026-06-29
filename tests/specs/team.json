@@ -42,6 +42,15 @@
         "send": { "callback": "team:pick_cutoff:17" },
         "expect": [
           {
+            "method": "editMessageText",
+            "payload": { "text": "Now — what's your timezone? I'll use it to send standup prompts at your local time." }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "team:tz:0:Europe%2FLondon" },
+        "expect": [
+          {
             "method": "sendMessage"
           }
         ]
