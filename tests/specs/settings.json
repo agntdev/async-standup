@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Team Settings: shows not-on-team message",
+    "steps": [
+      {
+        "send": { "callback": "team:settings" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "You're not in a team yet — tap 🔗 Join Team to get started." }
+          }
+        ]
+      }
+    ]
+  }
+]

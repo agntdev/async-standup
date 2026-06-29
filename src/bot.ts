@@ -6,7 +6,21 @@ import { createBot, type BotContext } from "./toolkit/index.js";
 // bot grows. Durable domain data must NOT live here — use the toolkit's
 // persistent storage (see AGENTS.md).
 export interface Session {
-  // example: step?: "awaiting_amount";
+  step: string;
+  // Multi-step form temporaries
+  tempTeamName?: string;
+  tempChannelId?: number;
+  tempPromptHour?: number;
+  tempCutoffHour?: number;
+  tempQuestions?: string[];
+  tempTimezonePolicy?: "member" | "team";
+  // Standup response flow
+  tempRunDate?: string;
+  tempTeamId?: string;
+  tempAnswers?: string[];
+  tempQuestionIndex?: number;
+  // History filters
+  historyFilter?: string;
 }
 
 export type Ctx = BotContext<Session>;
@@ -19,7 +33,7 @@ export type Ctx = BotContext<Session>;
  */
 export async function buildBot(token: string) {
   const bot = createBot<Session>(token, {
-    initial: () => ({}),
+    initial: () => ({ step: "idle" }),
   });
 
   const dir = new URL("./handlers/", import.meta.url);

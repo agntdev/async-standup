@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Today's Standup: shows not-on-team message",
+    "steps": [
+      {
+        "send": { "callback": "standup:today" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "You're not on a team yet. Join one to take part in standups." }
+          }
+        ]
+      }
+    ]
+  }
+]

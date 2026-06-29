@@ -1,13 +1,71 @@
 [
   {
-    "name": "/start shows Create Team button",
+    "name": "Create Team: full creation flow",
     "steps": [
       {
-        "send": { "text": "/start" },
+        "send": { "callback": "team:create" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Let's create your team! First — what would you like to name it?" }
+          }
+        ]
+      },
+      {
+        "send": { "text": "Alpha Team" },
         "expect": [
           {
             "method": "sendMessage",
-            "payload": { "text": "👋 Welcome! Tap a button below to get started." }
+            "payload": { "text": "Great! Now send me the Telegram channel ID where the daily digest should be posted.\n\n_Add this bot as an admin to your channel first, then forward a message from the channel here, or type the channel ID (e.g. -1001234567890)._" }
+          }
+        ]
+      },
+      {
+        "send": { "text": "-1001234567890" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "At what UTC hour (0–23) should I send the standup prompts?" }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "team:pick_prompt:9" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Prompts at 9:00 UTC. What UTC hour for the digest cutoff?" }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "team:pick_cutoff:17" },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Create Team: rejects empty name",
+    "steps": [
+      {
+        "send": { "callback": "team:create" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Let's create your team! First — what would you like to name it?" }
+          }
+        ]
+      },
+      {
+        "send": { "text": "x" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Team name should be 2 to 64 characters. Try again." }
           }
         ]
       }

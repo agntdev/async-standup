@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Schedule: shows not-on-team message",
+    "steps": [
+      {
+        "send": { "callback": "schedule:view" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "You're not on a team yet." }
+          }
+        ]
+      }
+    ]
+  }
+]
