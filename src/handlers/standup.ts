@@ -6,7 +6,9 @@ import {
   getTeam,
   getStandupRun,
   setParticipantResponse,
+  setParticipantSkipped,
   updateStandupRun,
+  getMembersByIds,
 } from "../domain.js";
 import {
   sendStandupPrompts,
@@ -56,10 +58,13 @@ composer.callbackQuery("standup:today", async (ctx) => {
   } else {
     const participant = run.participants.find((p) => p.telegramId === ctx.from!.id);
     const responded = run.participants.filter((p) => p.status === "responded").length;
+    const skipped = run.participants.filter((p) => p.status === "skipped").length;
     const total = run.participants.length;
 
     text = `📋 **${team.name}** — ${today}\n` +
-      `Progress: ${responded}/${total} answered\n`;
+      `Progress: ${responded}/${total} answered`;
+    if (skipped > 0) text += `, ${skipped} skipped`;
+    text += `\n`;
 
     if (participant) {
       if (participant.status === "responded") {
@@ -179,7 +184,7 @@ composer.callbackQuery(/^standup:skip:(.+):(.+)$/, async (ctx) => {
   const teamId = ctx.match[1];
   const date = ctx.match[2];
 
-  await setParticipantResponse(teamId, date, ctx.from!.id, []);
+  await setParticipantSkipped(teamId, date, ctx.from!.id);
 
   await ctx.editMessageText("⏭️ Skipped today's standup. Catch you tomorrow!");
 });

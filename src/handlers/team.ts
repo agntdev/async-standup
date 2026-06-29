@@ -12,6 +12,7 @@ import {
   generateInviteCode,
   type Team,
 } from "../domain.js";
+import { getClock } from "../clock.js";
 
 registerMainMenuItem({ label: "➕ Create Team", data: "team:create", order: 10 });
 
@@ -179,6 +180,15 @@ async function completeTeamCreation(ctx: Ctx, cutoffHour: number) {
   const channelId = ctx.session.tempChannelId as number;
   const teamName = ctx.session.tempTeamName as string;
 
+  // Validate: cutoff must be after prompt hour
+  if (cutoffHour <= promptHour) {
+    await ctx.reply(
+      `The cutoff hour (${cutoffHour}:00 UTC) needs to be after the prompt hour (${promptHour}:00 UTC). Please enter a later cutoff hour (0–23):`,
+    );
+    return;
+  }
+
+  const clock = getClock();
   const inviteCode = generateInviteCode();
   const teamId = inviteCode; // Use the invite code as the team's short ID
 
@@ -195,7 +205,9 @@ async function completeTeamCreation(ctx: Ctx, cutoffHour: number) {
     timezonePolicy: "member",
     inviteCode,
     memberIds: [ctx.from!.id],
-    createdAt: new Date().toISOString().split("T")[0],
+    createdAt: clock.todayISO(),
+    inviteCreatedAt: clock.timestamp(),
+    previousInviteCodes: [],
   };
 
   await createTeam(team);
@@ -205,8 +217,9 @@ async function completeTeamCreation(ctx: Ctx, cutoffHour: number) {
     telegramId: ctx.from!.id,
     displayName: ctx.from!.first_name + (ctx.from!.last_name ? ` ${ctx.from!.last_name}` : ""),
     timezone: "UTC",
+    timezoneOffsetHours: 0,
     teamId,
-    joinedAt: new Date().toISOString(),
+    joinedAt: clock.nowISO(),
   });
 
   // Clean up session

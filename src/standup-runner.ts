@@ -15,10 +15,16 @@ import {
 import { inlineButton, inlineKeyboard } from "./toolkit/index.js";
 
 /**
- * Send standup prompts to all members of a team.
+ * Send standup prompts to members of a team.
+ * If `targetMemberIds` is provided, only those members receive prompts
+ * (used for per-member timezone scheduling).
  * Sends a DM with the questions and "Answer now" / "Skip" buttons.
  */
-export async function sendStandupPrompts(api: Api, teamId: string): Promise<void> {
+export async function sendStandupPrompts(
+  api: Api,
+  teamId: string,
+  targetMemberIds?: number[],
+): Promise<void> {
   const clock = getClock();
   const today = clock.todayISO();
   const team = await getTeam(teamId);
@@ -27,10 +33,17 @@ export async function sendStandupPrompts(api: Api, teamId: string): Promise<void
   const existing = await getStandupRun(teamId, today);
   if (existing) return;
 
-  const members = await getMembersByIds(team.memberIds);
-  if (members.length === 0) return;
+  const allMembers = await getMembersByIds(team.memberIds);
+  if (allMembers.length === 0) return;
 
-  const participants: StandupParticipant[] = members.map((m) => ({
+  // Determine which members to include in this run
+  const membersToPrompt = targetMemberIds
+    ? allMembers.filter((m) => targetMemberIds.includes(m.telegramId))
+    : allMembers;
+
+  if (membersToPrompt.length === 0) return;
+
+  const participants: StandupParticipant[] = allMembers.map((m) => ({
     telegramId: m.telegramId,
     status: "pending" as const,
     answers: team.questions.map(() => ""),
@@ -48,7 +61,7 @@ export async function sendStandupPrompts(api: Api, teamId: string): Promise<void
 
   await createStandupRun(run);
 
-  for (const m of members) {
+  for (const m of membersToPrompt) {
     try {
       let text = `📋 **${team.name} — Standup for ${today}**\n\n`;
       for (let i = 0; i < team.questions.length; i++) {

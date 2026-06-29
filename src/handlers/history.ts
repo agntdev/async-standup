@@ -6,7 +6,7 @@ import {
   inlineKeyboard,
   paginate,
 } from "../toolkit/index.js";
-import { getMember, getRecentDigests, getRecentRuns, type Digest, type StandupRun } from "../domain.js";
+import { getMember, getRecentDigests, getDigest, getStandupRun, type Digest, type StandupRun } from "../domain.js";
 
 registerMainMenuItem({ label: "📜 View History", data: "history:recent", order: 30 });
 
@@ -28,7 +28,7 @@ composer.callbackQuery(/^history:page:(next|prev):(\d+)$/, async (ctx) => {
   await showHistory(ctx, page);
 });
 
-// ── Filter by date ────────────────────────────────────────────────────────
+// ── Filter by date: show detailed per-user responses ───────────────────────
 
 composer.callbackQuery("history:filter:date", async (ctx) => {
   await ctx.answerCallbackQuery();
@@ -105,11 +105,13 @@ async function showHistory(ctx: Ctx, page: number) {
 
   for (const d of pageItems) {
     text += `📅 ${d.runDate} — ${d.responseCount}/${d.totalMembers} responded`;
+    if (d.skippedUsers && d.skippedUsers.length > 0) {
+      text += `, ${d.skippedUsers.length} skipped`;
+    }
     if (d.blockers.length > 0) text += ` 🚨`;
     text += `\n`;
   }
 
-  // Also let the user know the command filter
   if (pageItems.length === 0) {
     text += `\n_No digests on this page._\n`;
   }
@@ -149,29 +151,71 @@ async function showSingleDayHistory(ctx: Ctx, date: string) {
   const member = await getMember(ctx.from!.id);
   if (!member) return;
 
-  const { getDigest } = await import("../domain.js");
+  // Try the digest first (compiled summary)
   const digest = await getDigest(member.teamId, date);
 
-  if (!digest) {
+  if (digest) {
+    // Show the digest summary — followed by per-user response details
+    let text = digest.summary + `\n\n`;
+
+    // Add per-user response details
+    if (digest.responses && digest.responses.length > 0) {
+      text += `**Individual responses:**\n`;
+      for (const r of digest.responses) {
+        const statusLabel = r.status === "skipped" ? " ⏭️" : "";
+        text += `\n👤 ${r.displayName}${statusLabel}:\n`;
+        if (r.status === "responded" && r.answers.some((a) => a?.trim())) {
+          for (let i = 0; i < r.answers.length; i++) {
+            const a = r.answers[i]?.trim();
+            if (a) text += `  • ${a}\n`;
+          }
+        } else if (r.status === "skipped") {
+          text += `  _Skipped today_\n`;
+        }
+      }
+    }
+
     await ctx.reply(
-      `No standup found for ${date}.`,
-      { reply_markup: inlineKeyboard([
-        [inlineButton("📜 Back to history", "history:recent")],
-        [inlineButton("⬅️ Main menu", "menu:main")],
-      ]) },
+      text,
+      {
+        reply_markup: inlineKeyboard([
+          [inlineButton("📜 Back to history", "history:recent")],
+          [inlineButton("⬅️ Main menu", "menu:main")],
+        ]),
+        parse_mode: "Markdown",
+      },
+    );
+    return;
+  }
+
+  // No digest yet — try the raw standup run for in-progress or
+  // not-yet-compiled data
+  const run = await getStandupRun(member.teamId, date);
+  if (run) {
+    let text = `📋 **Standup — ${date}** (${run.status})\n\n`;
+    for (const p of run.participants) {
+      const statusLabel = p.status === "responded" ? "✅" : p.status === "skipped" ? "⏭️" : "⏳";
+      text += `${statusLabel} User ${p.telegramId}: ${p.status}\n`;
+    }
+    await ctx.reply(
+      text,
+      {
+        reply_markup: inlineKeyboard([
+          [inlineButton("📜 Back to history", "history:recent")],
+          [inlineButton("⬅️ Main menu", "menu:main")],
+        ]),
+        parse_mode: "Markdown",
+      },
     );
     return;
   }
 
   await ctx.reply(
-    digest.summary,
-    {
-      reply_markup: inlineKeyboard([
-        [inlineButton("📜 Back to history", "history:recent")],
-        [inlineButton("⬅️ Main menu", "menu:main")],
-      ]),
-      parse_mode: "Markdown",
-    },
+    `No standup found for ${date}.`,
+    { reply_markup: inlineKeyboard([
+      [inlineButton("📜 Back to history", "history:recent")],
+      [inlineButton("⬅️ Main menu", "menu:main")],
+    ]) },
   );
 }
 
