@@ -1,5 +1,6 @@
 import { buildBot } from "./bot.js";
 import { setDefaultCommands } from "./toolkit/index.js";
+import { startScheduler } from "./handlers/standup.js";
 
 async function main() {
   const token = process.env.BOT_TOKEN;
@@ -8,8 +9,11 @@ async function main() {
     process.exit(1);
   }
   const bot = await buildBot(token);
-  // Publish the "/" command list to Telegram (discoverability). A button-first
-  // bot exposes only /start + /help; everything else is reached via menu buttons.
+
+  // Start the standup scheduler — it uses the bot's api to send messages
+  startScheduler(() => bot.api);
+
+  // Publish the "/" command list to Telegram (discoverability).
   await setDefaultCommands(bot);
   bot.start();
 }

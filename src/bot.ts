@@ -2,11 +2,24 @@ import { Composer } from "grammy";
 import { readdirSync } from "node:fs";
 import { createBot, type BotContext } from "./toolkit/index.js";
 
-// The per-chat session shape (ephemeral conversation state only). Extend as the
-// bot grows. Durable domain data must NOT live here — use the toolkit's
-// persistent storage (see AGENTS.md).
+/**
+ * Ephemeral conversation state (session storage — lost on restart).
+ * Durable domain data MUST NOT live here — use the persistent store (src/store.ts).
+ */
 export interface Session {
-  // example: step?: "awaiting_amount";
+  /** Multi-step flow step tracker. "" means idle. */
+  step: string;
+  /** Team creation flow data */
+  teamName?: string;
+  teamSchedule?: string;
+  teamTimezone?: string;
+  teamQuestions?: string[];
+  teamChannelId?: string;
+  teamInviteCode?: string;
+  /** Team ID for edit flows */
+  teamId?: string;
+  /** Join flow data */
+  joinCode?: string;
 }
 
 export type Ctx = BotContext<Session>;
@@ -19,7 +32,7 @@ export type Ctx = BotContext<Session>;
  */
 export async function buildBot(token: string) {
   const bot = createBot<Session>(token, {
-    initial: () => ({}),
+    initial: () => ({ step: "" }),
   });
 
   const dir = new URL("./handlers/", import.meta.url);
@@ -34,7 +47,7 @@ export async function buildBot(token: string) {
     );
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    files = []; // no handlers/ dir yet → nothing to load
+    files = [];
   }
   for (const file of files.sort()) {
     const mod = (await import(new URL(file, dir).href)) as { default?: Composer<Ctx> };
