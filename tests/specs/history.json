@@ -1,0 +1,16 @@
+[
+  {
+    "name": "View History: shows empty state when not on a team",
+    "steps": [
+      {
+        "send": { "callback": "history:recent" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "You're not on a team yet — join one to see standup history." }
+          }
+        ]
+      }
+    ]
+  }
+]

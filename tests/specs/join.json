@@ -1,0 +1,61 @@
+[
+  {
+    "name": "Join Team: shows code entry prompt",
+    "steps": [
+      {
+        "send": { "callback": "join:link" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Got an invite link or a join code from your team admin? Send it here — it's usually an 8-letter code you tap or paste." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Join Team: rejects short codes",
+    "steps": [
+      {
+        "send": { "callback": "join:link" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Got an invite link or a join code from your team admin? Send it here — it's usually an 8-letter code you tap or paste." }
+          }
+        ]
+      },
+      {
+        "send": { "text": "ab" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "That doesn't look like a valid code. It should be around 8 characters — check with your team admin." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Join Team: not found code",
+    "steps": [
+      {
+        "send": { "callback": "join:link" },
+        "expect": [
+          {
+            "method": "editMessageText"
+          }
+        ]
+      },
+      {
+        "send": { "text": "badcode1" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "No team found with code \"badcode1\". Check the spelling and try again, or ask your admin for the right link." }
+          }
+        ]
+      }
+    ]
+  }
+]
