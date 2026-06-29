@@ -88,6 +88,13 @@ composer.on("message:text", async (ctx, next) => {
       return;
     }
     const promptHour = ctx.session.tempPromptHour as number;
+    // Validate: cutoff must be after prompt
+    if (hour <= promptHour) {
+      await ctx.reply(
+        `The cutoff hour (${hour}:00 UTC) needs to be after the prompt hour (${promptHour}:00 UTC). Try again with a later hour (0–23):`,
+      );
+      return;
+    }
     const { getMember, getTeam, updateTeam } = await import("../domain.js");
     const member = await getMember(ctx.from!.id);
     if (!member) return;
@@ -166,7 +173,7 @@ composer.on("message:text", async (ctx, next) => {
 
 composer.callbackQuery("team:invite", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const { getMember, getTeam, generateInviteCode, updateTeam } = await import("../domain.js");
+  const { getMember, getTeam } = await import("../domain.js");
   const member = await getMember(ctx.from!.id);
   if (!member) return;
   const team = await getTeam(member.teamId);
@@ -188,18 +195,19 @@ composer.callbackQuery("team:invite", async (ctx) => {
 
 composer.callbackQuery("team:invite:new", async (ctx) => {
   await ctx.answerCallbackQuery({ text: "Generating new code…" });
-  const { getMember, getTeam, generateInviteCode, updateTeam } = await import("../domain.js");
+  const { getMember, getTeam, generateInviteCode, regenerateInviteCode } = await import("../domain.js");
   const member = await getMember(ctx.from!.id);
   if (!member) return;
   const team = await getTeam(member.teamId);
   if (!team || team.createdBy !== ctx.from!.id) return;
 
   const newCode = generateInviteCode();
-  await updateTeam(team.id, { inviteCode: newCode });
+  // Use regenerateInviteCode which properly re-keys the team record
+  await regenerateInviteCode(team.id, newCode, true);
 
   const link = `https://t.me/${ctx.me.username}?start=${newCode}`;
   await ctx.editMessageText(
-    `🔗 New invite link:\n\n\`${link}\`\n\nJoin code: \`${newCode}\``,
+    `🔗 New invite link:\n\n\`${link}\`\n\nJoin code: \`${newCode}\`\n\n_Note: the old code still works for 7 days._`,
     {
       reply_markup: inlineKeyboard([
         [inlineButton("🔄 Generate new code", "team:invite:new")],

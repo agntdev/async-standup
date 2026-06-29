@@ -52,26 +52,62 @@ async function runSchedulerTick(api: import("grammy").Api): Promise<void> {
   const teamIds: string[] = JSON.parse(raw);
 
   for (const teamId of teamIds) {
-    const { getTeam, getStandupRun } = await import("./domain.js");
+    const { getTeam, getStandupRun, getMembersByIds } = await import("./domain.js");
     const team = await getTeam(teamId);
     if (!team) continue;
 
     const run = await getStandupRun(teamId, today);
 
     // ── PROMPT TIME: start standup if not yet started ──
-    if (currentHour === team.schedule.promptHourUTC && !run) {
-      console.log(`[scheduler] sending prompts for team ${team.name}`);
-      await sendStandupPrompts(api, teamId);
+    // Per-member timezone: calculate the effective prompt hour for each member
+    // by mapping their local time to UTC. For team-wide policy, use the global hour.
+    if (!run) {
+      if (team.timezonePolicy === "member") {
+        // Per-member: send prompts when it's the member's local prompt hour
+        // We calculate which members are due right now based on their timezone offset
+        const members = await getMembersByIds(team.memberIds);
+        const dueMemberIds: number[] = [];
+
+        for (const m of members) {
+          // Member's local time = UTC + offset; if local hour matches prompt hour,
+          // they are due.
+          const offset = m.timezoneOffsetHours ?? 0;
+          const memberLocalHour = (currentHour + offset + 24) % 24;
+          if (memberLocalHour === team.schedule.promptHourUTC) {
+            dueMemberIds.push(m.telegramId);
+          }
+        }
+
+        if (dueMemberIds.length > 0) {
+          console.log(`[scheduler] sending prompts for ${dueMemberIds.length} members in team ${team.name} (per-member tz)`);
+          await sendStandupPrompts(api, teamId, dueMemberIds);
+        }
+      } else {
+        // Team-wide: all members at the same UTC hour
+        if (currentHour === team.schedule.promptHourUTC) {
+          console.log(`[scheduler] sending prompts for team ${team.name}`);
+          await sendStandupPrompts(api, teamId);
+        }
+      }
     }
 
-    // ── NUDGE TIME: 2 hours after prompt ──
-    if (run && run.status === "open" && currentHour === team.schedule.promptHourUTC + 2) {
-      console.log(`[scheduler] sending nudges for team ${team.name}`);
-      await sendNudges(api, teamId);
+    // ── NUDGE TIME: 2 hours after each member's local prompt ──
+    if (run && run.status === "open") {
+      const nudgeHour = (team.schedule.promptHourUTC + 2) % 24;
+      if (currentHour === nudgeHour) {
+        console.log(`[scheduler] sending nudges for team ${team.name}`);
+        await sendNudges(api, teamId);
+      }
     }
 
     // ── CUTOFF TIME: compile and post digest ──
-    if (run && run.status === "open" && currentHour === team.schedule.cutoffHourUTC) {
+    // Only proceed if cutoff > prompt (safety check)
+    if (
+      run &&
+      run.status === "open" &&
+      team.schedule.cutoffHourUTC > team.schedule.promptHourUTC &&
+      currentHour === team.schedule.cutoffHourUTC
+    ) {
       console.log(`[scheduler] compiling digest for team ${team.name}`);
       await compileAndPostDigest(api, teamId);
     }

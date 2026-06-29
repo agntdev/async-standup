@@ -6,11 +6,13 @@ import {
   inlineKeyboard,
 } from "../toolkit/index.js";
 import {
-  getTeam,
+  getTeamByInviteCode,
   getMember,
   createMember,
   addMemberToTeam,
+  addLateJoinerToRun,
 } from "../domain.js";
+import { getClock } from "../clock.js";
 
 registerMainMenuItem({ label: "🔗 Join Team", data: "join:link", order: 20 });
 
@@ -39,25 +41,30 @@ composer.command("start", async (ctx, next) => {
     return;
   }
 
-  // Look up team by invite code
-  const team = await getTeam(code);
+  // Look up team by invite code (supports primary + previous codes, with expiry)
+  const team = await getTeamByInviteCode(code);
   if (!team) {
     await ctx.reply(
-      "That invite code doesn't match any team. Check with your team admin for the right link, or create your own team.",
+      "That invite code doesn't match any team, or it may have expired. Check with your team admin for the right link, or create your own team.",
       { reply_markup: inlineKeyboard([[inlineButton("⬅️ Back to menu", "menu:main")]]) },
     );
     return;
   }
 
   // Join the team
+  const clock = getClock();
   await createMember({
     telegramId: ctx.from!.id,
     displayName: ctx.from!.first_name + (ctx.from!.last_name ? ` ${ctx.from!.last_name}` : ""),
     timezone: "UTC",
+    timezoneOffsetHours: 0,
     teamId: team.id,
-    joinedAt: new Date().toISOString(),
+    joinedAt: clock.nowISO(),
   });
   await addMemberToTeam(team.id, ctx.from!.id);
+
+  // If a standup run is already in progress today, add the late joiner to it
+  await addLateJoinerToRun(team.id, clock.todayISO(), ctx.from!.id);
 
   await ctx.reply(
     `🎉 Welcome to **${team.name}**! You're all set — I'll send you standup prompts at your local time.`,
@@ -77,6 +84,7 @@ composer.callbackQuery("join:link", async (ctx) => {
 
   const existingMember = await getMember(ctx.from!.id);
   if (existingMember) {
+    const { getTeam } = await import("../domain.js");
     const team = await getTeam(existingMember.teamId);
     await ctx.editMessageText(
       `You're already on team "${team?.name ?? existingMember.teamId}". Use the main menu for other options.`,
@@ -128,7 +136,7 @@ composer.on("message:text", async (ctx, next) => {
     return;
   }
 
-  const team = await getTeam(code);
+  const team = await getTeamByInviteCode(code);
   if (!team) {
     await ctx.reply(
       `No team found with code "${code}". Check the spelling and try again, or ask your admin for the right link.`,
@@ -140,14 +148,19 @@ composer.on("message:text", async (ctx, next) => {
   }
 
   // Join
+  const clock = getClock();
   await createMember({
     telegramId: ctx.from!.id,
     displayName: ctx.from!.first_name + (ctx.from!.last_name ? ` ${ctx.from!.last_name}` : ""),
     timezone: "UTC",
+    timezoneOffsetHours: 0,
     teamId: team.id,
-    joinedAt: new Date().toISOString(),
+    joinedAt: clock.nowISO(),
   });
   await addMemberToTeam(team.id, ctx.from!.id);
+
+  // If a standup run is already in progress today, add the late joiner to it
+  await addLateJoinerToRun(team.id, clock.todayISO(), ctx.from!.id);
 
   ctx.session.step = "idle";
   await ctx.reply(
