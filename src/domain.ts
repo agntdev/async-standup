@@ -153,7 +153,8 @@ export async function updateTeam(teamId: string, updates: Partial<Team>): Promis
 }
 
 /**
- * Regenerate a team's invite code, properly re-keying the team record.
+ * Regenerate a team's invite code, properly re-keying the team record
+ * AND migrating ALL historical data to the new key so nothing is orphaned.
  * The old invite code may optionally continue to work (stored in previousInviteCodes).
  */
 export async function regenerateInviteCode(
@@ -180,10 +181,46 @@ export async function regenerateInviteCode(
     updated.previousInviteCodes = [...(team.previousInviteCodes ?? []), oldCode];
   }
 
+  // ── Migrate all historical data ──
+  // 1. Standup runs
+  const runsIndexRaw = await store.get(runsIndexKey(teamId));
+  if (runsIndexRaw) {
+    const runDates: string[] = JSON.parse(runsIndexRaw);
+    for (const date of runDates) {
+      const runRaw = await store.get(standupRunKey(teamId, date));
+      if (runRaw) {
+        const run = JSON.parse(runRaw) as StandupRun;
+        run.id = `${newCode}:${date}`;
+        run.teamId = newCode;
+        await store.set(standupRunKey(newCode, date), JSON.stringify(run));
+      }
+      await store.del(standupRunKey(teamId, date));
+    }
+    await store.set(runsIndexKey(newCode), runsIndexRaw);
+    await store.del(runsIndexKey(teamId));
+  }
+
+  // 2. Digests
+  const digestsIndexRaw = await store.get(digestsIndexKey(teamId));
+  if (digestsIndexRaw) {
+    const digestDates: string[] = JSON.parse(digestsIndexRaw);
+    for (const date of digestDates) {
+      const digestRaw = await store.get(digestKey(teamId, date));
+      if (digestRaw) {
+        const digest = JSON.parse(digestRaw) as Digest;
+        digest.teamId = newCode;
+        await store.set(digestKey(newCode, date), JSON.stringify(digest));
+      }
+      await store.del(digestKey(teamId, date));
+    }
+    await store.set(digestsIndexKey(newCode), digestsIndexRaw);
+    await store.del(digestsIndexKey(teamId));
+  }
+
   // Write the updated team at the new key
   await store.set(teamKey(newCode), JSON.stringify(updated));
 
-  // Delete the old team key (but previousInviteCodes keep the old codes working via lookup)
+  // Delete the old team key
   await store.del(teamKey(teamId));
 
   // Update the teams index

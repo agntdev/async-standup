@@ -93,23 +93,58 @@ async function runSchedulerTick(api: import("grammy").Api): Promise<void> {
 
     // ── NUDGE TIME: 2 hours after each member's local prompt ──
     if (run && run.status === "open") {
-      const nudgeHour = (team.schedule.promptHourUTC + 2) % 24;
-      if (currentHour === nudgeHour) {
-        console.log(`[scheduler] sending nudges for team ${team.name}`);
-        await sendNudges(api, teamId);
+      if (team.timezonePolicy === "member") {
+        // Per-member: nudge 2 hours after each member's LOCAL prompt hour
+        const members = await getMembersByIds(team.memberIds);
+        let shouldNudge = false;
+        for (const m of members) {
+          const offset = m.timezoneOffsetHours ?? 0;
+          const memberLocalHour = (currentHour + offset + 24) % 24;
+          const nudgeLocalHour = (team.schedule.promptHourUTC + 2) % 24;
+          if (memberLocalHour === nudgeLocalHour) {
+            shouldNudge = true;
+            break;
+          }
+        }
+        if (shouldNudge) {
+          console.log(`[scheduler] sending nudges for team ${team.name} (per-member tz)`);
+          await sendNudges(api, teamId);
+        }
+      } else {
+        // Team-wide: nudge 2 hours after the global prompt hour
+        const nudgeHour = (team.schedule.promptHourUTC + 2) % 24;
+        if (currentHour === nudgeHour) {
+          console.log(`[scheduler] sending nudges for team ${team.name}`);
+          await sendNudges(api, teamId);
+        }
       }
     }
 
     // ── CUTOFF TIME: compile and post digest ──
-    // Only proceed if cutoff > prompt (safety check)
+    // The cutoff is always relative to prompt: it fires promptHour + (cutoffOffset) hours,
+    // where cutoffOffset is the hours between prompt and cutoff, wrapping midnight if needed.
+    // e.g. prompt=9, cutoff=17 → offset=8 → fires at 17 UTC
+    // e.g. prompt=20, cutoff=8 (next day) → offset=12 → fires at 8 UTC the next day
     if (
       run &&
-      run.status === "open" &&
-      team.schedule.cutoffHourUTC > team.schedule.promptHourUTC &&
-      currentHour === team.schedule.cutoffHourUTC
+      run.status === "open"
     ) {
-      console.log(`[scheduler] compiling digest for team ${team.name}`);
-      await compileAndPostDigest(api, teamId);
+      // Calculate the effective cutoff hour considering crossing-midnight schedules.
+      // cutoffHourUTC is always the absolute hour of day. If cutoff <= prompt, the cutoff
+      // is the NEXT day (e.g. prompt at 20:00, cutoff at 08:00 the next morning — a 12-hour window).
+      const promptHour = team.schedule.promptHourUTC;
+      const cutoffHour = team.schedule.cutoffHourUTC;
+      let firesToday: boolean;
+      if (cutoffHour > promptHour) {
+        firesToday = currentHour === cutoffHour;
+      } else {
+        // cutoff <= prompt means next-day cutoff — fires at cutoffHour
+        firesToday = currentHour === cutoffHour;
+      }
+      if (firesToday) {
+        console.log(`[scheduler] compiling digest for team ${team.name}`);
+        await compileAndPostDigest(api, teamId);
+      }
     }
   }
 }
