@@ -1,6 +1,6 @@
 [
   {
-    "name": "/start replies with the welcome + main menu",
+    "name": "/start replies with the welcome + main menu (all 4 feature buttons)",
     "steps": [
       {
         "send": { "text": "/start" },

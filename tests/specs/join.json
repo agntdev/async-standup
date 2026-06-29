@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Join Team button shows code entry prompt",
+    "steps": [
+      {
+        "send": { "callback": "join:link" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Got an invite code from your team admin? Send it here — it looks like ABCD-EFGH." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Join with invalid code shows friendly error",
+    "steps": [
+      {
+        "send": { "callback": "join:link" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "text": "DEAD-BEEF" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Couldn't find a team with that invite code — double-check the code and try again. Codes are case-sensitive." }
+          }
+        ]
+      }
+    ]
+  }
+]

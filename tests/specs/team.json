@@ -1,13 +1,64 @@
 [
   {
-    "name": "/start shows Create Team button",
+    "name": "Create Team button starts the wizard flow",
     "steps": [
       {
-        "send": { "text": "/start" },
+        "send": { "callback": "team:create" },
+        "expect": [
+          { "method": "editMessageText", "payload": { "text": "Let's set up your team! First, what would you like to name it?\n\nJust type the name below." } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Create Team — entering team name advances to schedule",
+    "steps": [
+      {
+        "send": { "callback": "team:create" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "text": "Engineering Squad" },
         "expect": [
           {
             "method": "sendMessage",
-            "payload": { "text": "👋 Welcome! Tap a button below to get started." }
+            "payload": { "text": "Great, \"Engineering Squad\" it is!\n\nWhat time should daily standups go out? Send it in HH:MM format (24-hour), for example \"09:00\". Standup prompts go to each member at their local time." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Create Team — invalid time gets retry prompt",
+    "steps": [
+      {
+        "send": { "callback": "team:create" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "text": "Acme Corp" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "text": "invalid time" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Hmm, that doesn't look like a valid time. Please send it in HH:MM format (24-hour), like 09:00 or 14:30." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Manage Team shows not-in-team message when no team",
+    "steps": [
+      {
+        "send": { "callback": "team:manage" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "You're not a member of any team yet. Create one or ask your admin for an invite link." }
           }
         ]
       }
